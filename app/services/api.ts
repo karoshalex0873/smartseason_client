@@ -1,77 +1,6 @@
 const API_URL = import.meta.env.VITE_API_URL?.trim();
 
-const SIGN_IN_PATH = "/auth/signin";
-
-async function parseErrorMessage(response: Response, fallbackMessage: string) {
-  try {
-    const errorData = await response.json();
-    return errorData.message || fallbackMessage;
-  } catch {
-    return fallbackMessage;
-  }
-}
-
-function getApiBaseUrl() {
-  if (!API_URL) {
-    throw new Error(
-      "VITE_API_URL is missing. Set it in client/.env for local development."
-    );
-  }
-
-  return API_URL.replace(/\/+$/, "");
-}
-
-function redirectToSignIn() {
-  if (typeof window === "undefined") return;
-  if (window.location.pathname === SIGN_IN_PATH) return;
-
-  window.location.replace(SIGN_IN_PATH);
-}
-
-async function handleApiError(response: Response, fallbackMessage: string) {
-  const message = await parseErrorMessage(response, fallbackMessage);
-
-  if (response.status === 401) {
-    redirectToSignIn();
-  }
-
-  throw new Error(message);
-}
-
-async function apiRequest<T>(input: string, init: RequestInit, fallbackMessage: string) {
-  let response: Response;
-
-  try {
-    response = await fetch(input, {
-      credentials: "include",
-      ...init,
-    });
-  } catch (error) {
-    const isNetworkError =
-      error instanceof TypeError ||
-      (error instanceof Error &&
-        /fetch|network|failed|load|econnrefused/i.test(error.message));
-
-    if (isNetworkError) {
-      throw new Error(
-        "Cannot reach the API server. Check that the backend is running and VITE_API_URL is correct."
-      );
-    }
-
-    throw error;
-  }
-
-  if (!response.ok) {
-    await handleApiError(response, fallbackMessage);
-  }
-
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.includes("application/json")) {
-    throw new Error(`${fallbackMessage}: server returned a non-JSON response.`);
-  }
-
-  return response.json() as Promise<T>;
-}
+const baseUrl = API_URL;
 
 export type CurrentUser = {
   id: string;
@@ -140,114 +69,131 @@ type UsersResponse = {
   roles: RoleOption[];
 };
 
-// Authentication APIs
-// sign in
-export async function signIn(email: string, password: string) {
-  const response = await apiRequest<{ user?: CurrentUser; message: string }>(`${getApiBaseUrl()}/auth/signin`, {
+type SignInResponse = {
+  message: string;
+  user: CurrentUser | { role?: string | { name?: string } };
+};
+
+// api to signIn
+async function signIn(email: string, password: string) {
+  const response = await fetch(`${baseUrl}/auth/signin`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      email,
-      password,
-    }),
     credentials: "include",
-  }, "Failed to sign in")
-
-  if (!response.user) {
+    body: JSON.stringify({ email, password }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to sign in");
+  }
+  const data = (await response.json()) as SignInResponse;
+  if (!data.user) {
     throw new Error("Invalid response from server");
   }
-
-  return response
+  return data;
 }
 
-// sign up (admin only)
-export async function signUp(userData: {
-  name: string;
-  email: string;
-  password: string;
-  roleId: string;
-}) {
-  return apiRequest(`${getApiBaseUrl()}/auth/signup`, {
+// api to signOut
+async function signOut() {
+  const response = await fetch(`${baseUrl}/auth/logout`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(userData),
-  }, "Failed to sign up");
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to sign out");
+  }
+  return response.json();
 }
 
-// Get current logged-in user
-export async function getCurrentUser() {
-  return apiRequest<CurrentUserResponse>(`${getApiBaseUrl()}/auth/current`, {
+// api to get current user
+async function getCurrentUser() {
+  const response = await fetch(`${baseUrl}/auth/current`, {
     method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
-  }, "Failed to fetch current user");
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to fetch current user");
+  }
+  return response.json() as Promise<CurrentUserResponse>;
 }
 
-// sign out
-export async function signOut() {
-  return apiRequest(`${getApiBaseUrl()}/auth/logout`, {
-    method: "POST",
-  }, "Failed to sign out");
-}
-
-// Field APIs
-// get fields
-export async function getFields() {
-  return apiRequest<FieldResponse>(`${getApiBaseUrl()}/field`, {
+// api to get fields
+async function getFields() {
+  const response = await fetch(`${baseUrl}/field`, {
     method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
-  }, "Failed to fetch fields");
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to fetch fields");
+  }
+  return response.json() as Promise<FieldResponse>;
 }
 
 // add field
-export async function addField(fieldData: {
+async function addField(fieldData: {
   name: string;
   cropType: string;
   plantingDate: string;
   agentId: string;
 }) {
-  return apiRequest(`${getApiBaseUrl()}/field/add`, {
+  const response = await fetch(`${baseUrl}/field/add`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: "include",
     body: JSON.stringify(fieldData),
-  }, "Failed to add field");
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to add field");
+  }
+  return response.json();
 }
 
 // get field by id
-export async function getFieldById(fieldId: string) {
-  return apiRequest<{ message: string; field: Field }>(`${getApiBaseUrl()}/field/${fieldId}`, {
+async function getFieldById(fieldId: string) {
+  const response = await fetch(`${baseUrl}/field/${fieldId}`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
     },
-  }, "Failed to fetch field details");
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to fetch field details");
+  }
+  return response.json() as Promise<{ message: string; field: Field }>;
 }
 
 // add field update (notes and stage)
-export async function addFieldUpdate(
+async function addFieldUpdate(
   fieldId: string,
   updateData: { notes: string; stage: string }
 ) {
-  return apiRequest(`${getApiBaseUrl()}/stage/track/${fieldId}`, {
+  const response = await fetch(`${baseUrl}/stage/track/${fieldId}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: "include",
     body: JSON.stringify(updateData),
-  }, "Failed to add field update");
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to add field update");
+  }
+  return response.json();
 }
 
 // update field details (name, crop type, planting date, agent)
-export async function updateFieldDetails(
+async function updateFieldDetails(
   fieldId: string,
   details: {
     name?: string;
@@ -256,74 +202,127 @@ export async function updateFieldDetails(
     agentId?: string;
   }
 ) {
-  return apiRequest(`${getApiBaseUrl()}/field/update/${fieldId}`, {
+  const response = await fetch(`${baseUrl}/field/update/${fieldId}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: "include",
     body: JSON.stringify(details),
-  }, "Failed to update field details");
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to update field details");
+  }
+  return response.json();
 }
 
 // delete field
-export async function deleteField(fieldId: string) {
-  return apiRequest(`${getApiBaseUrl()}/field/${fieldId}`, {
+async function deleteField(fieldId: string) {
+  const response = await fetch(`${baseUrl}/field/${fieldId}`, {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
     },
-  }, "Failed to delete field");
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to delete field");
+  }
+  return response.json();
 }
 
 // User Management APIs (Admin Only)
 // get users and roles
-export async function getUsers() {
-  return apiRequest<UsersResponse>(`${getApiBaseUrl()}/users`, {
+async function getUsers() {
+  const response = await fetch(`${baseUrl}/users`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
     },
-  }, "Failed to fetch users");
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to fetch users");
+  }
+  return response.json() as Promise<UsersResponse>;
 }
 
 // add user (admin only)
-export async function addUser(userData: {
+async function addUser(userData: {
   name: string;
   email: string;
   roleId: string;
 }) {
-  return apiRequest<{
-    message: string;
-    temporaryPassword: string;
-    user: ManagedUser;
-  }>(`${getApiBaseUrl()}/users`, {
+  const response = await fetch(`${baseUrl}/users`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: "include",
     body: JSON.stringify(userData),
-  }, "Failed to add user");
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to add user");
+  }
+  return response.json() as Promise<{
+    message: string;
+    temporaryPassword: string;
+    user: ManagedUser;
+  }>;
 }
+
 // update user details (name, email, role)
-export async function updateUser(
+async function updateUser(
   userId: string,
   details: { name?: string; email?: string; roleId?: string }
 ) {
-  return apiRequest(`${getApiBaseUrl()}/users/${userId}`, {
+  const response = await fetch(`${baseUrl}/users/${userId}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: "include",
     body: JSON.stringify(details),
-  }, "Failed to update user");
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to update user");
+  }
+  return response.json();
 }
 
 // delete user
-export async function deleteUser(userId: string) {
-  return apiRequest(`${getApiBaseUrl()}/users/${userId}`, {
+async function deleteUser(userId: string) {
+  const response = await fetch(`${baseUrl}/users/${userId}`, {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
     },
-  }, "Failed to delete user");
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to delete user");
+  }
+  return response.json();
 }
+
+export {
+  signIn,
+  signOut,
+  getCurrentUser,
+  getFields,
+  addField,
+  getFieldById,
+  addFieldUpdate,
+  updateFieldDetails,
+  deleteField,
+  getUsers,
+  addUser,
+  updateUser,
+  deleteUser,
+};

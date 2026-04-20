@@ -11,7 +11,13 @@ import {
 } from "react-icons/fi";
 
 import Button from "~/components/Button";
-import { getCurrentUser, getFields, signOut, type CurrentUser, type Field } from "~/services/api";
+import {
+  getCurrentUser,
+  getFields,
+  signOut,
+  type CurrentUser,
+  type Field,
+} from "~/services/api";
 import FieldCard from "~/components/fieldCard";
 
 const StatCard = ({

@@ -65,14 +65,29 @@ const getDaysSincePlanting = (plantingDate: string) => {
 // Status badge component
 const StatusBadge = ({ status }: { status: string }) => {
   const config = {
-    active: { icon: FiActivity, color: "emerald", label: "Active" },
-    atRisk: { icon: FiAlertTriangle, color: "amber", label: "At Risk" },
-    completed: { icon: FiCheckCircle, color: "slate", label: "Completed" },
+    active: {
+      icon: FiActivity,
+      className: "bg-emerald-100 text-emerald-700",
+      label: "Active",
+    },
+    atRisk: {
+      icon: FiAlertTriangle,
+      className: "bg-amber-100 text-amber-700",
+      label: "At Risk",
+    },
+    completed: {
+      icon: FiCheckCircle,
+      className: "bg-slate-100 text-slate-700",
+      label: "Completed",
+    },
   };
-  const { icon: Icon, color, label } = config[status as keyof typeof config] || config.active;
+  const { icon: Icon, className, label } =
+    config[status as keyof typeof config] || config.active;
 
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold bg-${color}-100 text-${color}-700`}>
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${className}`}
+    >
       <Icon className="h-3.5 w-3.5" />
       {label}
     </span>
