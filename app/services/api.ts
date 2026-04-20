@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL as string; 
+const API_URL = import.meta.env.VITE_API_URL?.trim();
 
 const SIGN_IN_PATH = "/auth/signin";
 
@@ -9,6 +9,16 @@ async function parseErrorMessage(response: Response, fallbackMessage: string) {
   } catch {
     return fallbackMessage;
   }
+}
+
+function getApiBaseUrl() {
+  if (!API_URL) {
+    throw new Error(
+      "VITE_API_URL is missing. Set it in client/.env for local development."
+    );
+  }
+
+  return API_URL.replace(/\/+$/, "");
 }
 
 function redirectToSignIn() {
@@ -29,13 +39,35 @@ async function handleApiError(response: Response, fallbackMessage: string) {
 }
 
 async function apiRequest<T>(input: string, init: RequestInit, fallbackMessage: string) {
-  const response = await fetch(input, {
-    credentials: "include",
-    ...init,
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(input, {
+      credentials: "include",
+      ...init,
+    });
+  } catch (error) {
+    const isNetworkError =
+      error instanceof TypeError ||
+      (error instanceof Error &&
+        /fetch|network|failed|load|econnrefused/i.test(error.message));
+
+    if (isNetworkError) {
+      throw new Error(
+        "Cannot reach the API server. Check that the backend is running and VITE_API_URL is correct."
+      );
+    }
+
+    throw error;
+  }
 
   if (!response.ok) {
     await handleApiError(response, fallbackMessage);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(`${fallbackMessage}: server returned a non-JSON response.`);
   }
 
   return response.json() as Promise<T>;
@@ -111,13 +143,23 @@ type UsersResponse = {
 // Authentication APIs
 // sign in
 export async function signIn(email: string, password: string) {
-  return apiRequest(`${API_URL}/auth/signin`, {
+  const response = await apiRequest<{ user?: CurrentUser; message: string }>(`${getApiBaseUrl()}/auth/signin`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ email, password }),
-  }, "Failed to sign in");
+    body: JSON.stringify({
+      email,
+      password,
+    }),
+    credentials: "include",
+  }, "Failed to sign in")
+
+  if (!response.user) {
+    throw new Error("Invalid response from server");
+  }
+
+  return response
 }
 
 // sign up (admin only)
@@ -127,7 +169,7 @@ export async function signUp(userData: {
   password: string;
   roleId: string;
 }) {
-  return apiRequest(`${API_URL}/auth/signup`, {
+  return apiRequest(`${getApiBaseUrl()}/auth/signup`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -138,7 +180,7 @@ export async function signUp(userData: {
 
 // Get current logged-in user
 export async function getCurrentUser() {
-  return apiRequest<CurrentUserResponse>(`${API_URL}/auth/current`, {
+  return apiRequest<CurrentUserResponse>(`${getApiBaseUrl()}/auth/current`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -148,7 +190,7 @@ export async function getCurrentUser() {
 
 // sign out
 export async function signOut() {
-  return apiRequest(`${API_URL}/auth/logout`, {
+  return apiRequest(`${getApiBaseUrl()}/auth/logout`, {
     method: "POST",
   }, "Failed to sign out");
 }
@@ -156,7 +198,7 @@ export async function signOut() {
 // Field APIs
 // get fields
 export async function getFields() {
-  return apiRequest<FieldResponse>(`${API_URL}/field`, {
+  return apiRequest<FieldResponse>(`${getApiBaseUrl()}/field`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -171,7 +213,7 @@ export async function addField(fieldData: {
   plantingDate: string;
   agentId: string;
 }) {
-  return apiRequest(`${API_URL}/field/add`, {
+  return apiRequest(`${getApiBaseUrl()}/field/add`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -182,7 +224,7 @@ export async function addField(fieldData: {
 
 // get field by id
 export async function getFieldById(fieldId: string) {
-  return apiRequest<{ message: string; field: Field }>(`${API_URL}/field/${fieldId}`, {
+  return apiRequest<{ message: string; field: Field }>(`${getApiBaseUrl()}/field/${fieldId}`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -195,7 +237,7 @@ export async function addFieldUpdate(
   fieldId: string,
   updateData: { notes: string; stage: string }
 ) {
-  return apiRequest(`${API_URL}/stage/track/${fieldId}`, {
+  return apiRequest(`${getApiBaseUrl()}/stage/track/${fieldId}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -214,7 +256,7 @@ export async function updateFieldDetails(
     agentId?: string;
   }
 ) {
-  return apiRequest(`${API_URL}/field/update/${fieldId}`, {
+  return apiRequest(`${getApiBaseUrl()}/field/update/${fieldId}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -225,7 +267,7 @@ export async function updateFieldDetails(
 
 // delete field
 export async function deleteField(fieldId: string) {
-  return apiRequest(`${API_URL}/field/${fieldId}`, {
+  return apiRequest(`${getApiBaseUrl()}/field/${fieldId}`, {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
@@ -236,7 +278,7 @@ export async function deleteField(fieldId: string) {
 // User Management APIs (Admin Only)
 // get users and roles
 export async function getUsers() {
-  return apiRequest<UsersResponse>(`${API_URL}/users`, {
+  return apiRequest<UsersResponse>(`${getApiBaseUrl()}/users`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -254,7 +296,7 @@ export async function addUser(userData: {
     message: string;
     temporaryPassword: string;
     user: ManagedUser;
-  }>(`${API_URL}/users`, {
+  }>(`${getApiBaseUrl()}/users`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -267,7 +309,7 @@ export async function updateUser(
   userId: string,
   details: { name?: string; email?: string; roleId?: string }
 ) {
-  return apiRequest(`${API_URL}/users/${userId}`, {
+  return apiRequest(`${getApiBaseUrl()}/users/${userId}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -278,7 +320,7 @@ export async function updateUser(
 
 // delete user
 export async function deleteUser(userId: string) {
-  return apiRequest(`${API_URL}/users/${userId}`, {
+  return apiRequest(`${getApiBaseUrl()}/users/${userId}`, {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
