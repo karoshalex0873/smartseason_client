@@ -1,6 +1,6 @@
-import type { ChangeEvent } from "react";
+import { useState, type ChangeEvent } from "react";
 import type { IconType } from "react-icons";
-import { FiAlertCircle } from "react-icons/fi";
+import { FiAlertCircle, FiEye, FiEyeOff } from "react-icons/fi";
 
 export type Option = {
   label: string;
@@ -36,12 +36,17 @@ const FormField = ({
   disabled = false,
   autoComplete,
 }: FormFieldProps) => {
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const inputId = `field-${name}`;
   const errorId = `${inputId}-error`;
+  const isPasswordField = type === "password";
+  const inputType = isPasswordField && isPasswordVisible ? "text" : type;
+  const hasTrailingControl = isPasswordField || !!error;
 
   const inputClasses = `
     form-input
     ${Icon ? "pl-10" : ""}
+    ${hasTrailingControl ? "pr-11" : ""}
     ${error ? "error" : ""}
   `;
 
@@ -94,7 +99,7 @@ const FormField = ({
           <input
             id={inputId}
             name={name}
-            type={type}
+            type={inputType}
             value={value}
             onChange={onChange}
             placeholder={placeholder}
@@ -106,8 +111,24 @@ const FormField = ({
           />
         )}
 
+        {isPasswordField && (
+          <button
+            type="button"
+            className="form-input-toggle"
+            onClick={() => setIsPasswordVisible((visible) => !visible)}
+            aria-label={isPasswordVisible ? "Hide password" : "Show password"}
+            aria-pressed={isPasswordVisible}
+          >
+            {isPasswordVisible ? (
+              <FiEyeOff className="h-5 w-5" />
+            ) : (
+              <FiEye className="h-5 w-5" />
+            )}
+          </button>
+        )}
+
         {error && (
-          <div className="form-input-error-icon">
+          <div className={`form-input-error-icon ${isPasswordField ? "with-toggle" : ""}`}>
             <FiAlertCircle className="h-5 w-5" />
           </div>
         )}
